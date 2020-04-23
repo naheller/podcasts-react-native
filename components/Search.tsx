@@ -1,5 +1,5 @@
-import React, { FC, useState } from 'react'
-import { Button, StyleSheet, Text, View, TextInput } from 'react-native'
+import React, { FC, useState, useEffect } from 'react'
+import { StyleSheet, Text, View, SafeAreaView, TextInput, FlatList } from 'react-native'
 import { useQuery } from '@apollo/react-hooks'
 import { gql } from 'apollo-boost'
 
@@ -12,36 +12,62 @@ const GET_PODCASTS_BY_NAME = gql`
   }
 `
 
+let timer: any
+
 export default () => {
-  const [searchText, setSearchText] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [delayedSearchTerm, setDelayedSearchTerm] = useState(searchTerm)
+
+  useEffect(() => {
+    if (timer) clearTimeout(timer)
+
+    timer = setTimeout(() => {
+      setDelayedSearchTerm(searchTerm)
+    }, 1000)
+  }, [searchTerm])
 
   return (
-    <View style={styles.container}>
-      <Text>Search for podcasts by name:</Text>
-      <TextInput
-        style={styles.searchInput}
-        onChangeText={(text) => setSearchText(text)}
-        value={searchText}
-      />
-      <Button title="Search" onPress={() => {}} />
-      {/* <Results searchTerm={searchText} /> */}
-    </View>
+    <SafeAreaView>
+      <View style={styles.container}>
+        <TextInput
+          style={styles.searchInput}
+          onChangeText={(text) => setSearchTerm(text)}
+          value={searchTerm}
+          placeholder="Search for podcasts"
+        />
+        {searchTerm !== '' && delayedSearchTerm !== '' && (
+          <Results searchTerm={delayedSearchTerm} />
+        )}
+      </View>
+    </SafeAreaView>
   )
 }
 
-type ResultsProps = {
+type Result = {
   searchTerm: String
 }
 
-const Results: FC<ResultsProps> = ({ searchTerm }) => {
+const Results: FC<Result> = ({ searchTerm }) => {
   const { loading, error, data } = useQuery(GET_PODCASTS_BY_NAME, {
     variables: { name: searchTerm },
+    errorPolicy: 'all',
   })
 
   if (loading) return null
-  if (error) return <Text>{`Error! ${error}`}</Text>
+  if (error) return <Text>{error.toString()}</Text>
 
-  return <Text>{data}</Text>
+  const { podcastsByName: podcasts } = data
+
+  return (
+    <FlatList
+      data={podcasts}
+      renderItem={({ item }) => (
+        <View>
+          <Text>{item.title_original}</Text>
+        </View>
+      )}
+    />
+  )
 }
 
 const styles = StyleSheet.create({
@@ -56,5 +82,8 @@ const styles = StyleSheet.create({
     width: '90%',
     borderColor: 'gray',
     borderWidth: 1,
+    marginBottom: 10,
+    paddingLeft: 10,
+    paddingRight: 10,
   },
 })
