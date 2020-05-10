@@ -1,5 +1,14 @@
 import React, { FC, useState, useEffect } from 'react'
-import { StyleSheet, Text, View, SafeAreaView, TextInput, FlatList } from 'react-native'
+import {
+  StyleSheet,
+  Button,
+  Text,
+  View,
+  SafeAreaView,
+  TextInput,
+  FlatList,
+  Modal,
+} from 'react-native'
 import { useQuery } from '@apollo/react-hooks'
 import { gql } from 'apollo-boost'
 
@@ -7,7 +16,20 @@ const GET_PODCASTS_BY_NAME = gql`
   query($name: String!) {
     podcastsByName(name: $name) {
       title_original
-      email
+      id
+    }
+  }
+`
+
+const GET_PODCAST_BY_ID = gql`
+  query($id: String!) {
+    podcastById(id: $id) {
+      title
+      episodes {
+        title
+        id
+        audio
+      }
     }
   }
 `
@@ -48,6 +70,8 @@ type Result = {
 }
 
 const Results: FC<Result> = ({ searchTerm }) => {
+  const [selectedPodcastId, setSelectedPodcastId] = useState('')
+
   const { loading, error, data } = useQuery(GET_PODCASTS_BY_NAME, {
     variables: { name: searchTerm },
     errorPolicy: 'all',
@@ -58,15 +82,87 @@ const Results: FC<Result> = ({ searchTerm }) => {
 
   const { podcastsByName: podcasts } = data
 
+  if (selectedPodcastId) {
+    return <Episodes podcastId={selectedPodcastId} goBack={() => setSelectedPodcastId('')} />
+  }
+
   return (
     <FlatList
       data={podcasts}
-      renderItem={({ item }) => (
-        <View>
-          <Text>{item.title_original}</Text>
+      renderItem={({ item: { id, title_original } }) => (
+        <View style={styles.button}>
+          <Button
+            title={title_original}
+            onPress={() => {
+              setSelectedPodcastId(id)
+            }}
+          />
         </View>
       )}
     />
+  )
+}
+
+type Podcast = {
+  podcastId: String
+  goBack: Function
+}
+
+const Episodes: FC<Podcast> = ({ podcastId, goBack }) => {
+  const [selectedEpisodeAudio, setSelectedEpisodeAudio] = useState('')
+
+  const { loading, error, data } = useQuery(GET_PODCAST_BY_ID, {
+    variables: { id: podcastId },
+    errorPolicy: 'all',
+  })
+
+  if (loading) return null
+  if (error) return <Text>{error.toString()}</Text>
+
+  const { podcastById: podcast } = data
+
+  return (
+    <View>
+      <Modal visible={selectedEpisodeAudio !== ''}>
+        <View>
+          <EpisodePlayer audioUrl={selectedEpisodeAudio} />
+        </View>
+      </Modal>
+      <View style={styles.button}>
+        <Button
+          title="< Back"
+          onPress={() => {
+            goBack()
+          }}
+          color="#dcdcdc"
+        />
+      </View>
+      <FlatList
+        data={podcast.episodes}
+        renderItem={({ item: { title, audio } }) => (
+          <View style={styles.button}>
+            <Button
+              title={title}
+              onPress={() => {
+                setSelectedEpisodeAudio(audio)
+              }}
+            />
+          </View>
+        )}
+      />
+    </View>
+  )
+}
+
+type Episode = {
+  audioUrl: String
+}
+
+const EpisodePlayer: FC<Episode> = ({ audioUrl }) => {
+  return (
+    <View>
+      <Text>{audioUrl}</Text>
+    </View>
   )
 }
 
@@ -85,5 +181,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingLeft: 10,
     paddingRight: 10,
+  },
+  button: {
+    marginBottom: 10,
+  },
+  modal: {
+    elevation: 5,
   },
 })
